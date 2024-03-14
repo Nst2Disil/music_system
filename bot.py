@@ -2,14 +2,11 @@ from multiprocessing import context
 import os
 import subprocess
 from turtle import update
-# import uuid
 import telebot
 from telebot import types
 import music21
 from telegram import Voice
 # import miditime
-# import pygame
-# import audiosegment
 # import pydub
 #from pydub import AudioSegment
 from midi2audio import FluidSynth
@@ -56,31 +53,34 @@ def callback_message(callback):
         output_path = 'oemer_results'
         run_oemer(img_path, output_path)
 
-        # Загрузка MusicXML файла
+        # Конвертация MusicXML в MIDI
         xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
         score = music21.converter.parse(xml_path)
-        
-        # Конвертация MusicXML в MIDI
-        midi_path = os.path.join('oemer_results', str(chat_id) + ".mid")
-        score.write('midi', midi_path) 
+        midiPath = os.path.join('oemer_results', str(chat_id) + ".mid")
+        score.write('midi', midiPath)
+
+        # Конвертация MIDI в аудиоформат
+        wavPath = os.path.join('oemer_results', str(chat_id) + ".wav")
+        mp3Path = os.path.join('oemer_results', str(chat_id) + ".mp3")
+        convert_midi_to_mp3(midiPath, wavPath, mp3Path)
 
         # Отправка файла
         bot.send_message(chat_id=chat_id, text="Результат:")
-        bot.send_document(chat_id=chat_id, document=open(midi_path, 'rb'))
+        bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
 
-        # Конвертация MIDI в WAV
-        wav_path = os.path.join('oemer_results', str(chat_id) + ".wav")
-        mp3_path = os.path.join('oemer_results', str(chat_id) + ".mp3")
-        FluidSynth().midi_to_audio(midi_path, wav_path)
-        sound = AudioSegment.from_wav(wav_path) 
-        sound.export(mp3_path, format="mp3")
-        bot.send_voice(chat_id, mp3_path)
 
-        # Открываем MP3 файл для чтения в бинарном режиме
-        # with open("C:\\Users\\nasty\Downloads\\file_example_MP3_700KB.mp3", 'rb') as audio_file:
-        #     bot.send_audio(chat_id=chat_id, audio=audio_file, title="Название аудиофайла", performer="Исполнитель")
-        
 
+
+def convert_midi_to_mp3(midiPath, wavPath, mp3Path):
+    flS = "fluidsynth-2.3.4-win10-x64\\bin\\fluidsynth.exe"
+    soundF = "GeneralUser_GS_1.471\\GeneralUser_GS_v1.471.sf2"
+    lame = "lame3.100-64\\lame.exe"
+
+    midi_to_wav = f"{flS} -ni {soundF} {midiPath} -F {wavPath}"
+    subprocess.run(midi_to_wav, shell=True)
+
+    wav_to_mp3 = f"{lame} {wavPath} {mp3Path}"
+    subprocess.run(wav_to_mp3, shell=True)
 
 
 def run_oemer(img_path, output_path):
