@@ -1,4 +1,3 @@
-from multiprocessing import context
 import os
 import subprocess
 import telebot
@@ -11,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
 print('Bot works!')
+
 
 # декоратор
 @bot.message_handler(commands=['start'])
@@ -35,7 +35,8 @@ def get_photo(message):
     markup = types.InlineKeyboardMarkup()
     btn1 = types.InlineKeyboardButton('Прослушать целиком', callback_data='oemer_all')
     btn2 = types.InlineKeyboardButton('Прослушать по частям', callback_data='oemer_parts')
-    markup.row(btn1, btn2)
+    markup.row(btn1)
+    markup.row(btn2)
     bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
 
 
@@ -51,33 +52,35 @@ def callback_message(callback):
     xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
 
     if callback.data == 'oemer_all':
-        # Конвертация MusicXML в MIDI
-        score = music21.converter.parse(xml_path)
-        midiPath = os.path.join('oemer_results', str(chat_id) + ".mid")
-        score.write('midi', midiPath)
-
-        # Конвертация MIDI в аудиоформат
-        wavPath = os.path.join('oemer_results', str(chat_id) + ".wav")
-        mp3Path = os.path.join('oemer_results', str(chat_id) + ".mp3")
-        convert_midi_to_mp3(midiPath, wavPath, mp3Path)
+        mp3Path = main_converter(xml_path, chat_id)
 
         bot.send_message(chat_id=chat_id, text="Результат:")
         bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
     
     if callback.data == 'oemer_parts':
         all_measures_num = count_measures(xml_path)
-        print('Всего тактов:', all_measures_num)
         bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
-        # TODO: поймать цифру от пользователя (ввод или создать кнопки)
-        measures_per_file = 6
+        # запрос числа тактов в одном файле у пользователя
+        @bot.message_handler(func=lambda message: True)
+        def handle_message(message):
+            try:
+                measures_per_file = int(message.text)
+                if measures_per_file > all_measures_num:
+                    bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
+                else:
+                    bot.send_message(chat_id=chat_id, text="Результат:")
+                    measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
+                    files_count = 0
+                    for name, measures_set in measures_sets_dictionary.items():
+                        files_count+=1
+                        new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
+                        create_mini_musicXML(xml_path, new_path, measures_set)
 
-        measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
-        for name, measures_set in measures_sets_dictionary.items():
-            new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
-            create_mini_musicXML(xml_path, new_path, measures_set)
-        
-        bot.send_message(chat_id=chat_id, text="Результат:")
-        # TODO: реализовать отправку пользователю (+ отследить количество созданных файлов, чтобы не отправлять старые)
+                        new_mp3Path = main_converter(new_path, chat_id)
+                        bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
+                        bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
+            except ValueError:
+                bot.send_message(callback.message.chat.id, "Неверный ввод.")
 
 
 def count_measures(musicXML_path):
@@ -131,6 +134,21 @@ def create_mini_musicXML(musicXML_path, output_path, measures_set):
     # создание нового дерева XML
     new_tree = ET.ElementTree(new_root)
     new_tree.write(output_path, encoding="UTF-8", xml_declaration=True)
+
+
+def main_converter(xml_path, chat_id):
+    # Конвертация MusicXML в MIDI
+    score = music21.converter.parse(xml_path)
+    file_name, _ = os.path.splitext(xml_path)
+    midiPath = file_name + ".mid"
+    score.write('midi', midiPath)
+
+    # Конвертация MIDI в аудиоформат
+    wavPath = file_name + ".wav"
+    mp3Path = file_name + ".mp3"
+    convert_midi_to_mp3(midiPath, wavPath, mp3Path)
+
+    return mp3Path
 
 
 def convert_midi_to_mp3(midiPath, wavPath, mp3Path):
