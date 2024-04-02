@@ -3,41 +3,59 @@ import subprocess
 import telebot
 from telebot import types
 import music21
-from telegram import Update
-from telegram.ext import Updater, CallbackContext, CallbackQueryHandler
 import xml.etree.ElementTree as ET
 
 
 bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
 print('Bot works!')
+# Переменные состояния
+waiting_for_img = False
+waiting_for_number = False
+
+
+def ask_for_img(chat_id):
+    global waiting_for_img
+    bot.send_message(chat_id, 'Отправьте изображение нотного листа.')
+    waiting_for_img = True
 
 
 # декоратор
 @bot.message_handler(commands=['start'])
 def main(message): # message - информация о пользователе и чате
-    bot.send_message(message.chat.id, 'Отправьте изображение нотного листа (фотографию или pdf-файл).')
+    ask_for_img(message.chat.id)
 
 
 @bot.message_handler(content_types=['photo'])
 def get_photo(message):
-    # идентификатор фотографии
-    file_id = message.photo[-1].file_id
-    # путь к фотографии в Tg
-    tg_path = bot.get_file(file_id).file_path
+    global waiting_for_img
+    if waiting_for_img:
+        # идентификатор фотографии
+        file_id = message.photo[-1].file_id
+        # путь к фотографии в Tg
+        tg_path = bot.get_file(file_id).file_path
 
-    # Сохранение изображения
-    downloaded_file = bot.download_file(tg_path)
-    file_name = str(message.chat.id) + ".jpg"
-    img_path = os.path.join('oemer_input', file_name)
-    with open(img_path, 'wb') as new_file:
-        new_file.write(downloaded_file)
+        # Сохранение изображения
+        downloaded_file = bot.download_file(tg_path)
+        file_name = str(message.chat.id) + ".jpg"
+        img_path = os.path.join('oemer_input', file_name)
+        with open(img_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
 
-    markup = types.InlineKeyboardMarkup()
-    btn1 = types.InlineKeyboardButton('Прослушать целиком', callback_data='oemer_all')
-    btn2 = types.InlineKeyboardButton('Прослушать по частям', callback_data='oemer_parts')
-    markup.row(btn1)
-    markup.row(btn2)
-    bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('Прослушать целиком', callback_data='oemer_all')
+        btn2 = types.InlineKeyboardButton('Прослушать по частям', callback_data='oemer_parts')
+        btn3 = types.InlineKeyboardButton('Выбрать другое изображение', callback_data = 'another_img')
+        markup.row(btn1)
+        markup.row(btn2)
+        markup.row(btn3)
+        bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
+
+        waiting_for_img = False
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'another_img')
+def handle_btn3(callback_query):
+    ask_for_img(callback_query.message.chat.id)
 
 
 # декоратор для обработки callback_data    
@@ -48,7 +66,7 @@ def callback_message(callback):
 
     img_path = os.path.join('oemer_input', str(chat_id) + ".jpg")
     output_path = 'oemer_results'
-    run_oemer(img_path, output_path)
+    # run_oemer(img_path, output_path)
     xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
 
     if callback.data == 'oemer_all':
@@ -58,29 +76,35 @@ def callback_message(callback):
         bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
     
     if callback.data == 'oemer_parts':
+        global waiting_for_number
         all_measures_num = count_measures(xml_path)
         bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
+        waiting_for_number = True
         # запрос числа тактов в одном файле у пользователя
         @bot.message_handler(func=lambda message: True)
         def handle_message(message):
-            try:
-                measures_per_file = int(message.text)
-                if measures_per_file > all_measures_num:
-                    bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
-                else:
-                    bot.send_message(chat_id=chat_id, text="Результат:")
-                    measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
-                    files_count = 0
-                    for name, measures_set in measures_sets_dictionary.items():
-                        files_count+=1
-                        new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
-                        create_mini_musicXML(xml_path, new_path, measures_set)
+            global waiting_for_number
+            if waiting_for_number:
+                try:
+                    measures_per_file = int(message.text)
+                    if measures_per_file > all_measures_num:
+                        bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
+                    else:
+                        bot.send_message(chat_id=chat_id, text="Результат:")
+                        measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
+                        files_count = 0
+                        for name, measures_set in measures_sets_dictionary.items():
+                            files_count+=1
+                            new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
+                            create_mini_musicXML(xml_path, new_path, measures_set)
 
-                        new_mp3Path = main_converter(new_path, chat_id)
-                        bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
-                        bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
-            except ValueError:
-                bot.send_message(callback.message.chat.id, "Неверный ввод.")
+                            new_mp3Path = main_converter(new_path, chat_id)
+                            bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
+                            bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
+                except ValueError:
+                    bot.send_message(callback.message.chat.id, "Неверный ввод.")
+                finally:
+                    waiting_for_number = False
 
 
 def count_measures(musicXML_path):
