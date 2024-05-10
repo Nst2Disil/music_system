@@ -66,7 +66,7 @@ def callback_message(callback):
 
     img_path = os.path.join('oemer_input', str(chat_id) + ".jpg")
     output_path = 'oemer_results'
-    # run_oemer(img_path, output_path)
+    run_oemer(img_path, output_path)
     xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
 
     if callback.data == 'oemer_all':
@@ -90,6 +90,7 @@ def callback_message(callback):
                     if measures_per_file > all_measures_num:
                         bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
                     else:
+                        waiting_for_number = False
                         bot.send_message(chat_id=chat_id, text="Результат:")
                         measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
                         files_count = 0
@@ -98,14 +99,13 @@ def callback_message(callback):
                             new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
                             create_mini_musicXML(xml_path, new_path, measures_set)
 
+
                             new_mp3Path = main_converter(new_path, chat_id)
                             bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
                             bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
                 except ValueError:
                     bot.send_message(callback.message.chat.id, "Неверный ввод.")
-                finally:
-                    waiting_for_number = False
-
+                    
 
 def count_measures(musicXML_path):
     tree = ET.parse(musicXML_path)
