@@ -105,7 +105,7 @@ def callback_message(callback):
                             bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
                 except ValueError:
                     bot.send_message(callback.message.chat.id, "Неверный ввод.")
-                    
+
 
 def count_measures(musicXML_path):
     tree = ET.parse(musicXML_path)
