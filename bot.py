@@ -12,6 +12,9 @@ print('Bot works!')
 waiting_for_img = False
 waiting_for_number = False
 
+input_path = 'oemer_input'
+output_path = 'oemer_results'
+
 
 def ask_for_img(chat_id):
     global waiting_for_img
@@ -28,33 +31,34 @@ def main(message): # message - информация о пользователе 
 @bot.message_handler(content_types=['photo'])
 def get_photo(message):
     global waiting_for_img
-    if waiting_for_img:
-        # идентификатор фотографии
-        file_id = message.photo[-1].file_id
-        # путь к фотографии в Tg
-        tg_path = bot.get_file(file_id).file_path
+    try:
+        if waiting_for_img:
+            # идентификатор фотографии
+            file_id = message.photo[-1].file_id
+            # путь к фотографии в Tg
+            tg_path = bot.get_file(file_id).file_path
 
-        # Сохранение изображения
-        downloaded_file = bot.download_file(tg_path)
-        file_name = str(message.chat.id) + ".jpg"
-        img_path = os.path.join('oemer_input', file_name)
-        with open(img_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
+            # Сохранение изображения
+            downloaded_file = bot.download_file(tg_path)
+            file_name = str(message.chat.id) + ".jpg"
+            img_path = os.path.join(input_path, file_name)
+            with open(img_path, 'wb') as new_file:
+                new_file.write(downloaded_file)
 
-        markup = types.InlineKeyboardMarkup()
-        btn1 = types.InlineKeyboardButton('Прослушать целиком', callback_data='oemer_all')
-        btn2 = types.InlineKeyboardButton('Прослушать по частям', callback_data='oemer_parts')
-        btn3 = types.InlineKeyboardButton('Выбрать другое изображение', callback_data = 'another_img')
-        markup.row(btn1)
-        markup.row(btn2)
-        markup.row(btn3)
-        bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
-
+            markup = types.InlineKeyboardMarkup()
+            btn1 = types.InlineKeyboardButton('Прослушать целиком', callback_data='oemer_all')
+            btn2 = types.InlineKeyboardButton('Прослушать по частям', callback_data='oemer_parts')
+            another_img_btn = types.InlineKeyboardButton('Выбрать другое изображение', callback_data = 'another_img')
+            markup.row(btn1)
+            markup.row(btn2)
+            markup.row(another_img_btn)
+            bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
+    finally:
         waiting_for_img = False
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'another_img')
-def handle_btn3(callback_query):
+def handle_another_img_btn(callback_query):
     ask_for_img(callback_query.message.chat.id)
 
 
@@ -64,10 +68,10 @@ def callback_message(callback):
     chat_id = callback.message.chat.id
     bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
 
-    img_path = os.path.join('oemer_input', str(chat_id) + ".jpg")
-    output_path = 'oemer_results'
+    img_path = os.path.join(input_path, str(chat_id) + ".jpg")
+    
     run_oemer(img_path, output_path)
-    xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
+    xml_path = os.path.join(output_path, str(chat_id) + ".musicxml")
 
     if callback.data == 'oemer_all':
         mp3Path = main_converter(xml_path, chat_id)
@@ -96,7 +100,7 @@ def callback_message(callback):
                         files_count = 0
                         for name, measures_set in measures_sets_dictionary.items():
                             files_count+=1
-                            new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
+                            new_path = os.path.join(output_path, str(chat_id) + "__" + name + ".musicxml")
                             create_mini_musicXML(xml_path, new_path, measures_set)
 
 
