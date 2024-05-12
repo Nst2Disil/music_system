@@ -67,46 +67,60 @@ def callback_message(callback):
     bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
 
     img_path = os.path.join('oemer_input', str(chat_id) + ".jpg")
-    output_path = 'oemer_results'
+    output_path = os.path.join('oemer_results', str(chat_id))
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    # удаление файлов предыдущего распознавания
+    file_list = os.listdir(output_path)
+    for file_name in file_list:
+        file_path = os.path.join(output_path, file_name)
+        os.remove(file_path)
+
     run_oemer(img_path, output_path)
-    xml_path = os.path.join('oemer_results', str(chat_id) + ".musicxml")
 
-    if callback.data == 'oemer_all':
-        mp3Path = main_converter(xml_path, chat_id)
+    # проверка наличия результата распознавания
+    xml_path = os.path.join(output_path, str(chat_id) + ".musicxml")
+    if not os.path.exists(xml_path):
+        bot.send_message(chat_id=chat_id, text="К сожалению, не удалось провести распознавание для данного изображения.")
+        ask_for_img(chat_id)
+    else:
+        if callback.data == 'oemer_all':
+            mp3Path = main_converter(xml_path, chat_id)
 
-        bot.send_message(chat_id=chat_id, text="Результат:")
-        bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
-    
-    if callback.data == 'oemer_parts':
-        global waiting_for_number
-        all_measures_num = count_measures(xml_path)
-        bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
-        waiting_for_number = True
-        # запрос числа тактов в одном файле у пользователя
-        @bot.message_handler(func=lambda message: True)
-        def handle_message(message):
+            bot.send_message(chat_id=chat_id, text="Результат:")
+            bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
+        
+        if callback.data == 'oemer_parts':
             global waiting_for_number
-            if waiting_for_number:
-                try:
-                    measures_per_file = int(message.text)
-                    if measures_per_file > all_measures_num:
-                        bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
-                    else:
-                        waiting_for_number = False
-                        bot.send_message(chat_id=chat_id, text="Результат:")
-                        measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
-                        files_count = 0
-                        for name, measures_set in measures_sets_dictionary.items():
-                            files_count+=1
-                            new_path = os.path.join('oemer_results', str(chat_id) + "__" + name + ".musicxml")
-                            create_mini_musicXML(xml_path, new_path, measures_set)
+            all_measures_num = count_measures(xml_path)
+            bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
+            waiting_for_number = True
+            # запрос числа тактов в одном файле у пользователя
+            @bot.message_handler(func=lambda message: True)
+            def handle_message(message):
+                global waiting_for_number
+                if waiting_for_number:
+                    try:
+                        measures_per_file = int(message.text)
+                        if measures_per_file > all_measures_num:
+                            bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
+                        else:
+                            waiting_for_number = False
+                            bot.send_message(chat_id=chat_id, text="Результат:")
+                            measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
+                            files_count = 0
+                            for name, measures_set in measures_sets_dictionary.items():
+                                files_count+=1
+                                new_path = os.path.join(output_path, str(chat_id) + "__" + name + ".musicxml")
+                                create_mini_musicXML(xml_path, new_path, measures_set)
 
 
-                            new_mp3Path = main_converter(new_path, chat_id)
-                            bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
-                            bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
-                except ValueError:
-                    bot.send_message(callback.message.chat.id, "Неверный ввод.")
+                                new_mp3Path = main_converter(new_path, chat_id)
+                                bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
+                                bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
+                    except ValueError:
+                        bot.send_message(callback.message.chat.id, "Неверный ввод.")
 
 
 def count_measures(musicXML_path):
