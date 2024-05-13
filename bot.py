@@ -9,8 +9,8 @@ import xml.etree.ElementTree as ET
 bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
 print('Bot works!')
 # Переменные состояния
-waiting_for_img = False
-waiting_for_number = False
+waiting_for_img = {}
+waiting_for_number = {}
 
 input_path = 'oemer_input'
 output_path = 'oemer_results'
@@ -19,7 +19,7 @@ output_path = 'oemer_results'
 def ask_for_img(chat_id):
     global waiting_for_img
     bot.send_message(chat_id, 'Отправьте изображение нотного листа.')
-    waiting_for_img = True
+    waiting_for_img[chat_id] = True
 
 
 # декоратор
@@ -32,7 +32,7 @@ def main(message): # message - информация о пользователе 
 def get_photo(message):
     global waiting_for_img
     try:
-        if waiting_for_img:
+        if message.chat.id in waiting_for_img and waiting_for_img[message.chat.id]:
             # идентификатор фотографии
             file_id = message.photo[-1].file_id
             # путь к фотографии в Tg
@@ -54,7 +54,7 @@ def get_photo(message):
             markup.row(another_img_btn)
             bot.reply_to(message, 'Изображение принято!\nВыберите вариант прослушивания:', reply_markup=markup)
     finally:
-        waiting_for_img = False
+        waiting_for_img[message.chat.id] = False
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'another_img')
@@ -70,7 +70,7 @@ def callback_message(callback):
 
     img_path = os.path.join(input_path, str(chat_id) + ".jpg")
     
-    run_oemer(img_path, output_path)
+    # run_oemer(img_path, output_path)
     xml_path = os.path.join(output_path, str(chat_id) + ".musicxml")
 
     if callback.data == 'oemer_all':
@@ -83,18 +83,18 @@ def callback_message(callback):
         global waiting_for_number
         all_measures_num = count_measures(xml_path)
         bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
-        waiting_for_number = True
+        waiting_for_number[chat_id] = True
         # запрос числа тактов в одном файле у пользователя
         @bot.message_handler(func=lambda message: True)
         def handle_message(message):
             global waiting_for_number
-            if waiting_for_number:
+            if waiting_for_number[chat_id]:
                 try:
                     measures_per_file = int(message.text)
                     if measures_per_file > all_measures_num:
                         bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
                     else:
-                        waiting_for_number = False
+                        waiting_for_number[chat_id] = False
                         bot.send_message(chat_id=chat_id, text="Результат:")
                         measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
                         files_count = 0
