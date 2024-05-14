@@ -98,14 +98,14 @@ def callback_message(callback):
         ask_for_img(chat_id)
     else:
         if callback.data == CallbackTypes.oemer_all.value:
-            mp3Path = main_converter(xml_path, chat_id)
+            mp3_path = main_converter(xml_path, chat_id)
 
             bot.send_message(chat_id=chat_id, text="Результат:")
-            bot.send_voice(chat_id, voice=open(mp3Path, 'rb'))
+            bot.send_voice(chat_id, voice=open(mp3_path, 'rb'))
         
         if callback.data == CallbackTypes.oemer_parts.value:
             global waiting_for_tacts_number
-            all_measures_num = count_measures(xml_path)
+            all_tacts_num = count_tacts(xml_path)
             bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
             waiting_for_tacts_number[chat_id] = True
             # запрос числа тактов в одном файле у пользователя
@@ -114,54 +114,54 @@ def callback_message(callback):
                 global waiting_for_tacts_number
                 if chat_id in waiting_for_tacts_number:
                     try:
-                        measures_per_file = int(message.text)
-                        if measures_per_file > all_measures_num:
+                        tacts_per_file = int(message.text)
+                        if tacts_per_file > all_tacts_num:
                             bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
                         else:
                             del waiting_for_tacts_number[chat_id]
                             bot.send_message(chat_id=chat_id, text="Результат:")
-                            measures_sets_dictionary = create_measures_sets_dictionary(all_measures_num, measures_per_file)
+                            tacts_sets_dictionary = create_tacts_sets_dictionary(all_tacts_num, tacts_per_file)
                             files_count = 0
-                            for name, measures_set in measures_sets_dictionary.items():
+                            for name, tacts_set in tacts_sets_dictionary.items():
                                 files_count+=1
                                 new_path = os.path.join(output_user_path, str(chat_id) + "__" + name + ".musicxml")
-                                create_mini_musicXML(xml_path, new_path, measures_set)
+                                create_mini_musicXML(xml_path, new_path, tacts_set)
 
-                                new_mp3Path = main_converter(new_path, chat_id)
+                                new_mp3_path = main_converter(new_path, chat_id)
                                 bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
-                                bot.send_voice(chat_id, voice=open(new_mp3Path, 'rb'))
+                                bot.send_voice(chat_id, voice=open(new_mp3_path, 'rb'))
                     except ValueError:
                         bot.send_message(callback.message.chat.id, "Неверный ввод.")
 
 
-def count_measures(musicXML_path):
+def count_tacts(musicXML_path):
     tree = ET.parse(musicXML_path)
     root = tree.getroot()
     # поиск элементов measure в файле
-    measures = root.findall('.//measure')
-    num_measures = len(measures)
-    return num_measures
+    tacts = root.findall('.//measure')
+    num_tacts = len(tacts)
+    return num_tacts
 
 
-def create_measures_sets_dictionary(all_measures_num, measures_per_file):
-    measures_sets = {}
+def create_tacts_sets_dictionary(all_tacts_num, tacts_per_file):
+    tacts_sets = {}
     current_set = []
     set_num = 1
-    for i in range(1, all_measures_num+1):
+    for i in range(1, all_tacts_num+1):
         current_set.append(str(i))
-        if len(current_set) == measures_per_file:
-            measures_sets[f"measures_set{set_num}"] = current_set
+        if len(current_set) == tacts_per_file:
+            tacts_sets[f"tacts_set{set_num}"] = current_set
             current_set = []
             set_num += 1
     if current_set: 
-        measures_sets[f"measures_set{set_num}"] = current_set
-    return measures_sets
+        tacts_sets[f"tacts_set{set_num}"] = current_set
+    return tacts_sets
 
 
-def create_mini_musicXML(musicXML_path, output_path, measures_set):
+def create_mini_musicXML(musicXML_path, output_path, tacts_set):
     tree = ET.parse(musicXML_path)
     root = tree.getroot()
-    measures = [measure for measure in root.findall(".//measure") if measure.attrib.get('number') in measures_set]
+    tacts = [tact for tact in root.findall(".//measure") if tact.attrib.get('number') in tacts_set]
 
     # элемент part-list
     part_list = root.find(".//part-list")
@@ -175,12 +175,12 @@ def create_mini_musicXML(musicXML_path, output_path, measures_set):
     # создание элемента part
     part = ET.SubElement(new_root, "part")
     part.set("id", "P1")
-    for measure in measures:
-        part.append(measure)
+    for tact in tacts:
+        part.append(tact)
 
     # добавление элемента attributes в элемент первого такта
-    first_measure = new_root.find(".//measure")
-    first_measure.insert(0, attributes)
+    first_tact = new_root.find(".//measure")
+    first_tact.insert(0, attributes)
 
     # создание нового дерева XML
     new_tree = ET.ElementTree(new_root)
