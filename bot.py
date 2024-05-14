@@ -5,6 +5,8 @@ import telebot
 from telebot import types
 import music21
 import xml.etree.ElementTree as ET
+from midi2audio import FluidSynth
+from pydub import AudioSegment
 
 
 bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
@@ -15,6 +17,7 @@ waiting_for_tacts_number = {}
 
 INPUT_PATH = 'oemer_input'
 OUTPUT_PATH = 'oemer_results'
+
 
 class CallbackTypes(Enum):
     oemer_all = "oemer_all"
@@ -185,15 +188,12 @@ def main_converter(xml_path, chat_id):
 
 
 def convert_midi_to_mp3(midiPath, wavPath, mp3Path):
-    flS = "fluidsynth-2.3.4-win10-x64\\bin\\fluidsynth.exe"
-    soundF = "GeneralUser_GS_1.471\\GeneralUser_GS_v1.471.sf2"
-    lame = "lame3.100-64\\lame.exe"
+    soundFont = "GeneralUser_GS_1.471\\GeneralUser_GS_v1.471.sf2"
+    fs = FluidSynth(soundFont)
+    fs.midi_to_audio(midiPath, wavPath)
 
-    midi_to_wav = f"{flS} -ni {soundF} {midiPath} -F {wavPath}"
-    subprocess.run(midi_to_wav, shell=True)
-
-    wav_to_mp3 = f"{lame} {wavPath} {mp3Path}"
-    subprocess.run(wav_to_mp3, shell=True)
+    audio = AudioSegment.from_wav(wavPath)
+    audio.export(mp3Path, format="mp3")    
 
 
 def run_oemer(img_path, output_path):
