@@ -14,6 +14,7 @@ print('Bot works!')
 # Переменные состояния
 waiting_for_image = {}
 waiting_for_tacts_number = {}
+oemer_already_worked = {}
 
 INPUT_PATH = 'oemer_input'
 OUTPUT_PATH = 'oemer_results'
@@ -68,8 +69,13 @@ def get_photo(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == CallbackTypes.another_img.value)
 def handle_btn3(callback_query):
+    global oemer_already_worked
     chat_id = callback_query.message.chat.id
+    if chat_id in oemer_already_worked:
+        del oemer_already_worked[chat_id]
+    
     ask_for_img(chat_id)
+
     # удаление последнего сообщения с кнопками
     last_reply_massage = callback_query.message.id
     bot.delete_message(chat_id, last_reply_massage)
@@ -78,43 +84,45 @@ def handle_btn3(callback_query):
 # декоратор для обработки callback_data    
 @bot.callback_query_handler(func=lambda callback: True)
 def callback_message(callback):
+    global oemer_already_worked
     chat_id = callback.message.chat.id
-    wait_massage = bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
-    wait_massage_id = wait_massage.message_id
 
     img_path = os.path.join(INPUT_PATH, str(chat_id) + ".jpg")
     output_user_path = os.path.join(OUTPUT_PATH, str(chat_id))
-    
-    if not os.path.exists(output_user_path):
-        os.makedirs(output_user_path)
 
-    # удаление файлов предыдущего распознавания
-    file_list = os.listdir(output_user_path)
-    for file_name in file_list:
-        file_path = os.path.join(output_user_path, file_name)
-        os.remove(file_path)
+    # проверка необходимости запуска OMR-решения
+    if not chat_id in oemer_already_worked:
+        wait_massage = bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
+        wait_massage_id = wait_massage.message_id
 
-    run_oemer(img_path, output_user_path)
+        if not os.path.exists(output_user_path):
+            os.makedirs(output_user_path)
+        else:
+            # удаление файлов предыдущего распознавания
+            file_list = os.listdir(output_user_path)
+            for file_name in file_list:
+                file_path = os.path.join(output_user_path, file_name)
+                os.remove(file_path)
+
+        run_oemer(img_path, output_user_path)
+        oemer_already_worked[chat_id] = True
+        bot.delete_message(chat_id, wait_massage_id)
 
     # проверка наличия результата распознавания
     xml_path = os.path.join(output_user_path, str(chat_id) + ".musicxml")
     if not os.path.exists(xml_path):
-        bot.delete_message(chat_id, wait_massage_id)
         bot.send_message(chat_id=chat_id, text="К сожалению, не удалось провести распознавание для данного изображения.")
-        ask_for_img(chat_id)
     else:
         if callback.data == CallbackTypes.oemer_all.value:
             mp3_path = main_converter(xml_path, chat_id)
 
-            bot.delete_message(chat_id, wait_massage_id)
             bot.send_message(chat_id=chat_id, text="Результат полного распознавания:")
             bot.send_voice(chat_id, voice=open(mp3_path, 'rb'))
         
         if callback.data == CallbackTypes.oemer_parts.value:
             global waiting_for_tacts_number
             all_tacts_num = count_tacts(xml_path)
-            bot.delete_message(chat_id, wait_massage_id)
-            bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите цифру.")
+            bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите число.")
             waiting_for_tacts_number[chat_id] = True
             # запрос числа тактов в одном файле у пользователя
             @bot.message_handler(func=lambda message: True)
