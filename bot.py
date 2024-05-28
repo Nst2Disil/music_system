@@ -7,10 +7,13 @@ import music21
 import xml.etree.ElementTree as ET
 from midi2audio import FluidSynth
 from pydub import AudioSegment
+from dotenv import load_dotenv
 
 
-bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
-print('Bot works!')
+load_dotenv()
+token = os.getenv('TOKEN')
+bot = telebot.TeleBot(token)
+
 # Переменные состояния
 waiting_for_image = {}
 waiting_for_tacts_number = {}

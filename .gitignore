@@ -4,3 +4,6 @@ fluidsynth-2.3.4-win10-x64/
 GeneralUser_GS_1.471/
 lame3.100-64/
 requirements.txt
+.env
+own_requirements.txt
+DockerFile
