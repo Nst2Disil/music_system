@@ -7,10 +7,13 @@ import music21
 import xml.etree.ElementTree as ET
 from midi2audio import FluidSynth
 from pydub import AudioSegment
+from dotenv import load_dotenv
 
 
-bot = telebot.TeleBot("6988184286:AAED6rzN7QoS82gugcdAIpZrDSwNZwmytbA")
-print('Bot works!')
+load_dotenv()
+token = os.getenv('TOKEN')
+bot = telebot.TeleBot(token)
+
 # Переменные состояния
 waiting_for_image = {}
 waiting_for_tacts_number = {}
@@ -138,6 +141,7 @@ def callback_message(callback):
                 if callback.data == CallbackTypes.oemer_parts.value:
                     global waiting_for_tacts_number
                     all_tacts_num = count_tacts(xml_path)
+                    print("Всего тактов:", all_tacts_num)
                     bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите число.")
                     waiting_for_tacts_number[chat_id] = True
                     # запрос числа тактов в одном файле у пользователя
@@ -147,6 +151,7 @@ def callback_message(callback):
                         if chat_id in waiting_for_tacts_number:
                             try:
                                 tacts_per_file = int(message.text)
+                                print("Введено:", tacts_per_file)
                                 if tacts_per_file > all_tacts_num:
                                     bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
                                 else:
