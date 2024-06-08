@@ -42,7 +42,6 @@ def ask_for_img(chat_id):
     waiting_for_image[chat_id] = True
 
 
-# декоратор
 @bot.message_handler(commands=['start'])
 def main(message): # message - информация о пользователе и чате
     ask_for_img(message.chat.id)
@@ -114,8 +113,7 @@ def callback_message(callback):
                 file_path = os.path.join(output_user_path, file_name)
                 os.remove(file_path)
 
-        # oemer_process = run_oemer(img_path, output_user_path)
-        send_oemer_request(img_path)
+        send_oemer_request(img_path, output_user_path, chat_id)
         oemer_already_worked[chat_id] = True
 
     # проверка наличия результата распознавания
@@ -144,10 +142,8 @@ def callback_message(callback):
                         tacts_per_file = int(message.text)
                         print("Введено:", tacts_per_file)
                         if tacts_per_file > all_tacts_num:
-                            print(">")
                             bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
                         else:
-                            print("<=")
                             del waiting_for_tacts_number[chat_id]
                             bot.send_message(chat_id=chat_id, text="Результат распознавания по частям:")
                             tacts_sets_dictionary = create_tacts_sets_dictionary(all_tacts_num, tacts_per_file)
@@ -241,10 +237,15 @@ def convert_midi_to_mp3(midiPath, wavPath, mp3Path):
     audio.export(mp3Path, format="mp3")    
 
 
-def send_oemer_request(img_path):
+def send_oemer_request(img_path, output_user_path, chat_id):
+    xml_path = os.path.join(output_user_path, str(chat_id) + ".musicxml")
     with open(img_path, 'rb') as file:
         files = {'file': file}
-        requests.post(OEMER_SERVER_1_URL, files=files)
-    
+        response = requests.post(OEMER_SERVER_1_URL, files=files)
+
+        if response.status_code == 200 and response.content:
+            with open(xml_path, 'wb') as download_file:
+                download_file.write(response.content)
+   
 
 bot.polling(non_stop=True)
