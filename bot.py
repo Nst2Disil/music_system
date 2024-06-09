@@ -25,9 +25,10 @@ oemer_already_worked = {}
 
 INPUT_PATH = 'oemer_input'
 OUTPUT_PATH = 'oemer_results'
-OEMER_SERVER_1_URL = f'http://{host}:{port}/v1/oemer/recognize'
+OEMER_SERVER_1_RECOGNIZE_URL = f'http://{host}:{port}/v1/oemer/recognize'
+OEMER_SERVER_1_STATUS_URL = f'http://{host}:{port}/v1/oemer/status'
 
-wait_previous_recognition = 'Идёт обработка предыдущего запроса.\nПожалуйста, подождите.'
+wait_previous_recognition = 'Идёт обработка другого запроса.\nПожалуйста, подождите.'
 
 
 class CallbackTypes(Enum):
@@ -79,22 +80,26 @@ def get_photo(message):
 @bot.callback_query_handler(func=lambda call: call.data == CallbackTypes.another_img.value)
 def handle_btn3(callback_query):
     chat_id = callback_query.message.chat.id
-    global oemer_already_worked
-    if chat_id in oemer_already_worked:
-        del oemer_already_worked[chat_id]
-        
-    ask_for_img(chat_id)
+    if check_oemer_status():
+        global oemer_already_worked
+        if chat_id in oemer_already_worked:
+            del oemer_already_worked[chat_id]
+            
+        ask_for_img(chat_id)
 
-    # удаление последнего сообщения с кнопками
-    last_reply_massage = callback_query.message.id
-    bot.delete_message(chat_id, last_reply_massage)
-        
+        # удаление последнего сообщения с кнопками
+        last_reply_massage = callback_query.message.id
+        bot.delete_message(chat_id, last_reply_massage)
+    else:
+        bot.send_message(chat_id, wait_previous_recognition)       
+
 
 # декоратор для обработки callback_data    
 @bot.callback_query_handler(func=lambda callback: True)
 def callback_message(callback):
     chat_id = callback.message.chat.id
-    global oemer_already_worked
+    if check_oemer_status():
+        global oemer_already_worked
 
     img_path = os.path.join(INPUT_PATH, str(chat_id) + ".jpg")
     output_user_path = os.path.join(OUTPUT_PATH, str(chat_id))
@@ -113,13 +118,51 @@ def callback_message(callback):
                 file_path = os.path.join(output_user_path, file_name)
                 os.remove(file_path)
 
-        send_oemer_request(img_path, output_user_path, chat_id)
-        oemer_already_worked[chat_id] = True
+            send_oemer_request(img_path, output_user_path, chat_id)
+            oemer_already_worked[chat_id] = True
 
-    # проверка наличия результата распознавания
-    xml_path = os.path.join(output_user_path, str(chat_id) + ".musicxml")
-    if not os.path.exists(xml_path):
-        bot.send_message(chat_id=chat_id, text="К сожалению, не удалось провести распознавание для данного изображения.")
+        # проверка наличия результата распознавания
+        xml_path = os.path.join(output_user_path, str(chat_id) + ".musicxml")
+        if not os.path.exists(xml_path):
+            bot.send_message(chat_id=chat_id, text="К сожалению, не удалось провести распознавание для данного изображения.")
+        else:
+            if callback.data == CallbackTypes.oemer_all.value:
+                mp3_path = main_converter(xml_path, chat_id)
+
+                bot.send_message(chat_id=chat_id, text="Результат полного распознавания:")
+                bot.send_voice(chat_id, voice=open(mp3_path, 'rb'))
+                    
+            if callback.data == CallbackTypes.oemer_parts.value:
+                global waiting_for_tacts_number
+                all_tacts_num = count_tacts(xml_path)
+                print("Всего тактов:", all_tacts_num)
+                bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите число.")
+                waiting_for_tacts_number[chat_id] = True
+                # запрос числа тактов в одном файле у пользователя
+                @bot.message_handler(func=lambda message: True)
+                def handle_message(message):
+                    global waiting_for_tacts_number
+                    if chat_id in waiting_for_tacts_number:
+                        try:
+                            tacts_per_file = int(message.text)
+                            print("Введено:", tacts_per_file)
+                            if tacts_per_file > all_tacts_num:
+                                bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
+                            else:
+                                del waiting_for_tacts_number[chat_id]
+                                bot.send_message(chat_id=chat_id, text="Результат распознавания по частям:")
+                                tacts_sets_dictionary = create_tacts_sets_dictionary(all_tacts_num, tacts_per_file)
+                                files_count = 0
+                                for name, tacts_set in tacts_sets_dictionary.items():
+                                    files_count+=1
+                                    new_path = os.path.join(output_user_path, str(chat_id) + "__" + name + ".musicxml")
+                                    create_mini_musicXML(xml_path, new_path, tacts_set)
+
+                                    new_mp3_path = main_converter(new_path, chat_id)
+                                    bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
+                                    bot.send_voice(chat_id, voice=open(new_mp3_path, 'rb'))
+                        except ValueError:
+                            bot.send_message(callback.message.chat.id, "Неверный ввод.")
     else:
         if callback.data == CallbackTypes.oemer_all.value:
             mp3_path = main_converter(xml_path, chat_id)
@@ -241,11 +284,20 @@ def send_oemer_request(img_path, output_user_path, chat_id):
     xml_path = os.path.join(output_user_path, str(chat_id) + ".musicxml")
     with open(img_path, 'rb') as file:
         files = {'file': file}
-        response = requests.post(OEMER_SERVER_1_URL, files=files)
+        response = requests.post(OEMER_SERVER_1_RECOGNIZE_URL, files=files)
 
         if response.status_code == 200 and response.content:
             with open(xml_path, 'wb') as download_file:
                 download_file.write(response.content)
+
+
+def check_oemer_status():
+    response = requests.get(OEMER_SERVER_1_STATUS_URL)
+    if response.status_code == 200:
+        response_json = response.json()
+        oemer_free = response_json.get('free')
+    
+    return oemer_free
    
 
 bot.polling(non_stop=True)
