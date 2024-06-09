@@ -1,6 +1,5 @@
 from enum import Enum
 import os
-import subprocess
 import telebot
 from telebot import types
 import music21
@@ -24,7 +23,7 @@ waiting_for_tacts_number = {}
 oemer_already_worked = {}
 
 INPUT_PATH = 'oemer_input'
-OUTPUT_PATH = 'oemer_results'
+OUTPUT_PATH = 'oemer_output'
 OEMER_SERVER_1_RECOGNIZE_URL = f'http://{host}:{port}/v1/oemer/recognize'
 OEMER_SERVER_1_STATUS_URL = f'http://{host}:{port}/v1/oemer/status'
 
@@ -251,7 +250,8 @@ def send_oemer_request(img_path, output_user_path, chat_id):
         files = {'file': file}
         response = requests.post(OEMER_SERVER_1_RECOGNIZE_URL, files=files)
 
-        if response.status_code == 200 and response.content:
+        if response.status_code == 200:
+            print("поймал результат")
             with open(xml_path, 'wb') as download_file:
                 download_file.write(response.content)
 
