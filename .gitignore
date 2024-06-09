@@ -6,4 +6,3 @@ lame3.100-64/
 requirements.txt
 .env
 own_requirements.txt
-DockerFile

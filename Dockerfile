@@ -1,6 +1,10 @@
 FROM huecker.io/library/python:3.12
 
-RUN pip install oemer
 WORKDIR /app
 
-ENTRYPOINT ["oemer"]    
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+
+COPY . .
+
+CMD ["python", "bot.py"]

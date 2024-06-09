@@ -272,7 +272,7 @@ def main_converter(xml_path, chat_id):
 
 
 def convert_midi_to_mp3(midiPath, wavPath, mp3Path):
-    soundFont = "GeneralUser_GS_1.471\\GeneralUser_GS_v1.471.sf2"
+    soundFont = "GeneralUser_GS_v1.471.sf2"
     fs = FluidSynth(soundFont)
     fs.midi_to_audio(midiPath, wavPath)
 
