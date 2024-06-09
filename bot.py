@@ -101,22 +101,23 @@ def callback_message(callback):
     if check_oemer_status():
         global oemer_already_worked
 
-    img_path = os.path.join(INPUT_PATH, str(chat_id) + ".jpg")
-    output_user_path = os.path.join(OUTPUT_PATH, str(chat_id))
+        img_path = os.path.join(INPUT_PATH, str(chat_id) + ".jpg")
+        output_user_path = os.path.join(OUTPUT_PATH, str(chat_id))
 
-    # проверка необходимости запуска OMR-решения
-    if not chat_id in oemer_already_worked:
-        wait_recognition_message = bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
-        wait_recognition_message_id = wait_recognition_message.message_id
+        # проверка необходимости запуска OMR-решения
+        if not chat_id in oemer_already_worked:
+            wait_recognition_message = bot.send_message(chat_id, "Принято!\nИдёт процесс распознавания. Пожалуйста, подождите.")
+            wait_recognition_message_id = wait_recognition_message.message_id
 
-        if not os.path.exists(output_user_path):
-            os.makedirs(output_user_path)
-        else:
-            # удаление файлов предыдущего распознавания
-            file_list = os.listdir(output_user_path)
-            for file_name in file_list:
-                file_path = os.path.join(output_user_path, file_name)
-                os.remove(file_path)
+
+            if not os.path.exists(output_user_path):
+                os.makedirs(output_user_path)
+            else:
+                # удаление файлов предыдущего распознавания
+                file_list = os.listdir(output_user_path)
+                for file_name in file_list:
+                    file_path = os.path.join(output_user_path, file_name)
+                    os.remove(file_path)
 
             send_oemer_request(img_path, output_user_path, chat_id)
             oemer_already_worked[chat_id] = True
@@ -164,43 +165,7 @@ def callback_message(callback):
                         except ValueError:
                             bot.send_message(callback.message.chat.id, "Неверный ввод.")
     else:
-        if callback.data == CallbackTypes.oemer_all.value:
-            mp3_path = main_converter(xml_path, chat_id)
-
-            bot.send_message(chat_id=chat_id, text="Результат полного распознавания:")
-            bot.send_voice(chat_id, voice=open(mp3_path, 'rb'))
-                
-        if callback.data == CallbackTypes.oemer_parts.value:
-            global waiting_for_tacts_number
-            all_tacts_num = count_tacts(xml_path)
-            print("Всего тактов:", all_tacts_num)
-            bot.send_message(chat_id=chat_id, text="Сколько тактов вы хотите услышать в одном сообщении?\nВведите число.")
-            waiting_for_tacts_number[chat_id] = True
-            # запрос числа тактов в одном файле у пользователя
-            @bot.message_handler(func=lambda message: True)
-            def handle_message(message):
-                global waiting_for_tacts_number
-                if chat_id in waiting_for_tacts_number:
-                    try:
-                        tacts_per_file = int(message.text)
-                        print("Введено:", tacts_per_file)
-                        if tacts_per_file > all_tacts_num:
-                            bot.send_message(callback.message.chat.id, "В данном произведении меньшее количество тактов. Введите другое число.")
-                        else:
-                            del waiting_for_tacts_number[chat_id]
-                            bot.send_message(chat_id=chat_id, text="Результат распознавания по частям:")
-                            tacts_sets_dictionary = create_tacts_sets_dictionary(all_tacts_num, tacts_per_file)
-                            files_count = 0
-                            for name, tacts_set in tacts_sets_dictionary.items():
-                                files_count+=1
-                                new_path = os.path.join(output_user_path, str(chat_id) + "__" + name + ".musicxml")
-                                create_mini_musicXML(xml_path, new_path, tacts_set)
-
-                                new_mp3_path = main_converter(new_path, chat_id)
-                                bot.send_message(chat_id=chat_id, text=str(files_count) + "я часть:")
-                                bot.send_voice(chat_id, voice=open(new_mp3_path, 'rb'))
-                    except ValueError:
-                        bot.send_message(callback.message.chat.id, "Неверный ввод.")
+        bot.send_message(chat_id, wait_previous_recognition)
 
 
 def count_tacts(musicXML_path):
@@ -298,6 +263,6 @@ def check_oemer_status():
         oemer_free = response_json.get('free')
     
     return oemer_free
-   
+
 
 bot.polling(non_stop=True)
