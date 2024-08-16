@@ -1,7 +1,4 @@
-Выпускная квалификационная работа «Разработка системы распознавания и воспроизведения музыки на основе изображений нотных листов и её интеграция с Telegram Bot API».
-
-Graduate qualification work «Development of a music playback system based on images of sheet music using artificial intelligence and integration with the Telegram Bot API».
-
+Graduate qualification work «Development of a system for recognizing and playing music based on images of sheet music and its integration with Telegram Bot API». Backend part of the system. 
 
 In purpose to launch application in Docker-container see run_docker.sh script.
 
